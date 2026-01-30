@@ -85,31 +85,49 @@ class InstanceEval(object):
 
     def update(self, instances, target, lengths):
         
-        lengths = np.round( np.log(1 + lengths.cpu().numpy()) , 3)
-        tgt_labels = target["labels"].cpu().numpy().tolist()
+        tgt_labels = target["labels"].cpu().numpy()
         tgt_masks = target["masks"].transpose(0,1).cpu().numpy()
-        for tgt_label, tgt_mask in zip(tgt_labels, tgt_masks):
-            if tgt_label==self.ignore_label: continue
-
-            flag = False
-            for instance in instances:
-                src_label = instance["labels"]
-                src_score = instance["scores"]
-                if src_label==self.ignore_label: continue
-                if src_score< self.min_obj_score: continue
-                src_mask = instance["masks"]
+        
+        valid_indices = tgt_labels != self.ignore_label
+        tgt_labels = tgt_labels[valid_indices]
+        tgt_masks = tgt_masks[valid_indices]
+        
+        gt_matched = np.zeros(len(tgt_labels), dtype=bool)
+        instances = sorted(instances, key=lambda x: x['scores'], reverse=True)
+        
+        for instance in instances:
+            src_label = instance["labels"]
+            src_score = instance["scores"]
+            src_mask = instance["masks"]
+            
+            if src_label == self.ignore_label or src_score < self.min_obj_score:
+                continue
+            
+            best_iou = -1
+            best_gt_idx = -1
+            
+            for i, (tgt_label, tgt_mask) in enumerate(zip(tgt_labels, tgt_masks)):
+                inter = np.logical_and(src_mask, tgt_mask).sum()
+                union = np.logical_or(src_mask, tgt_mask).sum()
+                iou = inter / (union + 1e-6)
                 
-                interArea = sum(lengths[np.logical_and(src_mask,tgt_mask)])
-                unionArea = sum(lengths[np.logical_or(src_mask,tgt_mask)])
-                iou = interArea / (unionArea + 1e-6)
-                if iou>=self.IoU_thres:
-                    flag = True
-                    if tgt_label==src_label:
-                        self.tp_classes[tgt_label] += 1
-                        self.tp_classes_values[tgt_label] += iou
-                    else:
-                        self.fp_classes[src_label] += 1
-            if not flag: self.fn_classes[tgt_label] += 1
+                if iou > best_iou:
+                    best_iou = iou
+                    best_gt_idx = i
+            
+            if best_iou >= self.IoU_thres:
+                if src_label == tgt_labels[best_gt_idx] and not gt_matched[best_gt_idx]:
+                    self.tp_classes[src_label] += 1
+                    self.tp_classes_values[src_label] += best_iou
+                    gt_matched[best_gt_idx] = True 
+                else:
+                    self.fp_classes[src_label] += 1
+            else:
+                self.fp_classes[src_label] += 1
+        
+        for i in range(len(tgt_labels)):
+            if not gt_matched[i]:
+                self.fn_classes[tgt_labels[i]] += 1
     
     def get_eval(self, logger):
     
