@@ -107,9 +107,9 @@ class InstanceEval(object):
             best_gt_idx = -1
             
             for i, (tgt_label, tgt_mask) in enumerate(zip(tgt_labels, tgt_masks)):
-                inter = np.logical_and(src_mask, tgt_mask).sum()
-                union = np.logical_or(src_mask, tgt_mask).sum()
-                iou = inter / (union + 1e-6)
+                interArea = sum(lengths[np.logical_and(src_mask,tgt_mask)])
+                unionArea = sum(lengths[np.logical_or(src_mask,tgt_mask)])
+                iou = interArea / (unionArea + 1e-6)
                 
                 if iou > best_iou:
                     best_iou = iou
