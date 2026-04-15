@@ -1,0 +1,95 @@
+###############################################################
+# Workspace Definition
+###############################################################
+[workspace]
+authors = ["Logan Lang <logan.lang@xtechlab.ykkap.com>"]
+channels = [
+  "https://prefix.dev/conda-forge",
+  "https://conda.anaconda.org/conda-forge",
+]
+description = "SymPoint V2: Panoptic Symbol Spotting with Layer Feature Enhancement"
+name = "sympointv2"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[dependencies]
+git = "*"
+python = ">=3.11,<=3.13"
+numpy = "*"
+scipy = "*"
+scikit-learn = "*"
+pillow = "*"
+pyyaml = "*"
+pycocotools = "*"
+open3d = "*"
+matplotlib = "*"
+
+[pypi-dependencies]
+munch = ">=2.5.0"
+svgpathtools = ">=1.6.1"
+tensorboardx = ">=2.5.1"
+terminaltables = "*"
+mmcv = ">=0.2.14"
+
+[tasks]
+parse-svg-train = "python parse_svg_v5.py --split train --data_dir ./dataset/train/train/svg_gt/"
+parse-svg-val = "python parse_svg_v5.py --split val --data_dir ./dataset/val/val/svg_gt/"
+parse-svg-test = "python parse_svg_v5.py --split test --data_dir ./dataset/test/test/svg_gt/"
+
+build-pointops = "cd modules/pointops && python setup.py install"
+
+###############################
+# PyTorch GPU feature
+###############################
+[feature.gpu.system-requirements]
+cuda = "12.0"
+
+[feature.gpu.dependencies]
+cuda-version = "12.9.*"
+pytorch-gpu = ">=2.8.0"
+torchvision = "*"
+
+[feature.gpu.pypi-dependencies]
+detectron2 = { git = "https://github.com/facebookresearch/detectron2.git" }
+
+[feature.gpu.tasks]
+train = "bash tools/train_dist.sh"
+test = "bash tools/test_dist.sh"
+infer = { cmd = "python tools/inference.py --config {{ config }} --checkpoint {{ checkpoint }}", args = [{ arg = "config", default = "configs/svg/svg_pointT.yaml" }, { arg = "checkpoint", default = "" }], description = "Run inference" }
+test-torch-gpu = """python -c "import torch;
+print(f'PyTorch version: {torch.__version__}')
+print(f'CUDA available: {torch.cuda.is_available()}')
+print(f'CUDA device count: {torch.cuda.device_count()}')
+print(f'Current device: {torch.cuda.current_device() if torch.cuda.is_available() else \"CPU\"}')" """
+
+###############################
+# PyTorch CPU feature
+###############################
+[feature.cpu.dependencies]
+pytorch = "*"
+torchvision = "*"
+
+[feature.cpu.pypi-dependencies]
+detectron2 = { git = "https://github.com/facebookresearch/detectron2.git" }
+
+[feature.cpu.tasks]
+test-torch = """python -c "import torch;
+print(f'PyTorch version: {torch.__version__}')
+print(f'CUDA available: {torch.cuda.is_available()}')
+print(f'CUDA device count: {torch.cuda.device_count()}')
+"""
+
+###############################
+# dev feature set dependencies
+###############################
+[feature.dev.dependencies]
+ipykernel = "*"
+ruff = "*"
+basedpyright = "*"
+
+###############################################################
+# Virtual Environments Definitions
+###############################################################
+[environments]
+default = { features = ["gpu", "dev"], solve-group = "default" }
+ci = { features = ["cpu", "dev"], solve-group = "default" }
